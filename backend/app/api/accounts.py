@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
+from app.models.risk import RiskLimit
 from app.models.trading import TradingAccount
 from app.models.user import User
 from app.schemas.trading import AccountCreate, AccountResponse
@@ -30,6 +31,8 @@ async def create_account(payload: AccountCreate, user: User = Depends(get_curren
         realized_pnl=0,
     )
     db.add(account)
+    await db.flush()
+    db.add(RiskLimit(account_id=account.id))
     await db.commit()
     await db.refresh(account)
     return account
