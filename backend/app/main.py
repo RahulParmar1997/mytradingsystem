@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.api.accounts import router as accounts_router
 from app.api.auth import router as auth_router, users_router
+from app.api.cancel import router as cancel_router
 from app.api.fills import router as fills_router
 from app.api.orders import router as orders_router
 from app.api.risk import router as risk_router
@@ -13,6 +14,7 @@ app.include_router(accounts_router)
 app.include_router(orders_router)
 app.include_router(risk_router)
 app.include_router(fills_router)
+app.include_router(cancel_router)
 
 
 @app.get("/health")
