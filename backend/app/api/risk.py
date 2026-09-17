@@ -29,15 +29,18 @@ async def check_order_risk(
     if not account:
         raise HTTPException(status_code=404, detail="Trading account not found")
 
-    # The risk API requires a symbol only through the eventual order flow; this endpoint
-    # validates account-level constraints using the current portfolio aggregate.
-    open_order_count = await db.scalar(
-        select(func.count(Order.id)).where(
-            Order.account_id == account.id,
-            Order.status.in_(["PENDING", "ACCEPTED", "PARTIALLY_FILLED", "CANCEL_PENDING"]),
-        )
+    position = await db.scalar(
+        select(Position).where(Position.account_id == account.id, Position.symbol == payload.symbol.upper())
     )
-    position = None
+    open_order_count = payload.open_order_count
+    if open_order_count is None:
+        open_order_count = await db.scalar(
+            select(func.count(Order.id)).where(
+                Order.account_id == account.id,
+                Order.status.in_(["PENDING", "ACCEPTED", "PARTIALLY_FILLED", "CANCEL_PENDING"]),
+            )
+        )
+
     decision = engine.evaluate_order(
         account=account,
         side=OrderSide(payload.side),
