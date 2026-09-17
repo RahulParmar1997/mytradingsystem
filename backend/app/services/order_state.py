@@ -1,6 +1,5 @@
 from app.models.order import OrderStatus
 
-
 _ALLOWED: dict[OrderStatus, set[OrderStatus]] = {
     OrderStatus.PENDING: {OrderStatus.ACCEPTED, OrderStatus.REJECTED, OrderStatus.CANCELLED, OrderStatus.EXPIRED},
     OrderStatus.ACCEPTED: {OrderStatus.PARTIALLY_FILLED, OrderStatus.FILLED, OrderStatus.CANCEL_PENDING, OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.EXPIRED},
