@@ -2,96 +2,30 @@ import { clearTokens, refreshSession } from "./auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-export type Account = {
-  id: string;
-  name: string;
-  currency: string;
-  initial_balance: string;
-  cash_balance: string;
-  realized_pnl: string;
-};
-
-export type Position = {
-  id: string;
-  account_id: string;
-  symbol: string;
-  quantity: string;
-  average_price: string;
-  market_price: string | null;
-  unrealized_pnl: string;
-};
-
-export type Order = {
-  id: string;
-  account_id: string;
-  client_order_id: string;
-  symbol: string;
-  side: "BUY" | "SELL";
-  order_type: "MARKET" | "LIMIT" | "STOP" | "STOP_LIMIT";
-  time_in_force: "DAY" | "GTC" | "IOC" | "FOK";
-  quantity: string;
-  limit_price: string | null;
-  stop_price: string | null;
-  filled_quantity: string;
-  average_fill_price: string | null;
-  status: string;
-  rejection_reason: string | null;
-};
+export type Account = { id: string; name: string; currency: string; initial_balance: string; cash_balance: string; realized_pnl: string };
+export type Position = { id: string; account_id: string; symbol: string; quantity: string; average_price: string; market_price: string | null; unrealized_pnl: string };
+export type Order = { id: string; account_id: string; client_order_id: string; symbol: string; side: "BUY" | "SELL"; order_type: "MARKET" | "LIMIT" | "STOP" | "STOP_LIMIT"; time_in_force: "DAY" | "GTC" | "IOC" | "FOK"; quantity: string; limit_price: string | null; stop_price: string | null; filled_quantity: string; average_fill_price: string | null; status: string; rejection_reason: string | null };
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
-    cache: "no-store",
-  });
-
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers: { "Content-Type": "application/json", ...(options.headers ?? {}) }, cache: "no-store" });
   if (response.status === 401 && options.headers && typeof window !== "undefined") {
     const refreshed = await refreshSession();
     if (refreshed) {
-      const headers = new Headers(options.headers);
-      headers.set("Authorization", `Bearer ${refreshed.access_token}`);
+      const headers = new Headers(options.headers); headers.set("Authorization", `Bearer ${refreshed.access_token}`);
       const retry = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, cache: "no-store" });
       if (!retry.ok) throw new Error((await retry.text()) || `API request failed with ${retry.status}`);
       return retry.json() as Promise<T>;
     }
     clearTokens();
   }
-
   if (!response.ok) throw new Error((await response.text()) || `API request failed with ${response.status}`);
   return response.json() as Promise<T>;
 }
 
-function authHeaders(accessToken?: string): HeadersInit | undefined {
-  return accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
-}
-
-export function listAccounts(accessToken?: string): Promise<Account[]> {
-  return request<Account[]>("/api/v1/accounts", { headers: authHeaders(accessToken) });
-}
-
-export function listPositions(accountId: string, accessToken?: string): Promise<Position[]> {
-  return request<Position[]>(`/api/v1/accounts/${encodeURIComponent(accountId)}/positions`, { headers: authHeaders(accessToken) });
-}
-
-export function listOrders(accountId?: string, accessToken?: string): Promise<Order[]> {
-  const query = accountId ? `?account_id=${encodeURIComponent(accountId)}` : "";
-  return request<Order[]>(`/api/v1/orders${query}`, { headers: authHeaders(accessToken) });
-}
-
-export function createOrder(payload: {
-  account_id: string;
-  client_order_id: string;
-  symbol: string;
-  side: Order["side"];
-  order_type: Order["order_type"];
-  time_in_force: Order["time_in_force"];
-  quantity: string;
-  limit_price?: string;
-  stop_price?: string;
-}, accessToken?: string): Promise<Order> {
-  return request<Order>("/api/v1/orders", {
-    method: "POST",
-    headers: authHeaders(accessToken),
-    body: JSON.stringify(payload),
-  });
-}
+function authHeaders(accessToken?: string): HeadersInit | undefined { return accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined; }
+export function listAccounts(accessToken?: string): Promise<Account[]> { return request<Account[]>("/api/v1/accounts", { headers: authHeaders(accessToken) }); }
+export function listPositions(accountId: string, accessToken?: string): Promise<Position[]> { return request<Position[]>(`/api/v1/accounts/${encodeURIComponent(accountId)}/positions`, { headers: authHeaders(accessToken) }); }
+export function listOrders(accountId?: string, accessToken?: string): Promise<Order[]> { return request<Order[]>(`/api/v1/orders${accountId ? `?account_id=${encodeURIComponent(accountId)}` : ""}`, { headers: authHeaders(accessToken) }); }
+export function createOrder(payload: { account_id: string; client_order_id: string; symbol: Order["symbol"]; side: Order["side"]; order_type: Order["order_type"]; time_in_force: Order["time_in_force"]; quantity: string; limit_price?: string; stop_price?: string }, accessToken?: string): Promise<Order> { return request<Order>("/api/v1/orders", { method: "POST", headers: authHeaders(accessToken), body: JSON.stringify(payload) }); }
+export function cancelOrder(orderId: string, accessToken?: string): Promise<{ order_id: string; status: string }> { return request(`/api/v1/orders/${encodeURIComponent(orderId)}/cancel`, { method: "POST", headers: authHeaders(accessToken) }); }
+export function confirmOrderCancel(orderId: string, accessToken?: string): Promise<{ order_id: string; status: string }> { return request(`/api/v1/orders/${encodeURIComponent(orderId)}/cancel/confirm`, { method: "POST", headers: authHeaders(accessToken) }); }
