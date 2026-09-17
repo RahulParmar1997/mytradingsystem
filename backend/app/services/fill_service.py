@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -22,19 +23,34 @@ class FillService:
         quantity: Decimal,
         price: Decimal,
         fee: Decimal = Decimal("0"),
+        executed_at: datetime | None = None,
     ) -> Fill:
+        if not execution_id.strip():
+            raise ValueError("execution_id is required")
         if quantity <= 0 or price <= 0 or fee < 0:
             raise ValueError("quantity and price must be positive; fee cannot be negative")
+
+        existing = await db.scalar(select(Fill).where(Fill.execution_id == execution_id))
+        if existing:
+            if (
+                existing.order_id != order_id
+                or existing.quantity != quantity
+                or existing.price != price
+                or existing.fee != fee
+            ):
+                raise ValueError("execution_id already exists with different execution details")
+            return existing
 
         order = await db.scalar(select(Order).where(Order.id == order_id).with_for_update())
         if order is None:
             raise ValueError("order not found")
-        if quantity > order.quantity - order.filled_quantity:
+        remaining = order.quantity - order.filled_quantity
+        if quantity > remaining:
             raise ValueError("fill quantity exceeds remaining order quantity")
 
-        existing = await db.scalar(select(Fill).where(Fill.execution_id == execution_id))
-        if existing:
-            return existing
+        new_filled = order.filled_quantity + quantity
+        target_status = OrderStatus.FILLED if new_filled == order.quantity else OrderStatus.PARTIALLY_FILLED
+        validate_transition(order.status, target_status)
 
         account = await db.scalar(select(TradingAccount).where(TradingAccount.id == order.account_id).with_for_update())
         if account is None:
@@ -82,13 +98,9 @@ class FillService:
             quantity=quantity,
             price=price,
             fee=fee,
-            executed_at=order.updated_at,
+            executed_at=executed_at or datetime.now(timezone.utc),
         )
         db.add(fill)
-
-        new_filled = order.filled_quantity + quantity
-        target_status = OrderStatus.FILLED if new_filled == order.quantity else OrderStatus.PARTIALLY_FILLED
-        validate_transition(order.status, target_status)
         order.filled_quantity = new_filled
         order.average_fill_price = (
             ((order.average_fill_price or Decimal("0")) * (new_filled - quantity) + price * quantity) / new_filled
