@@ -1,3 +1,5 @@
+import { clearTokens, refreshSession } from "./auth";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type Account = {
@@ -42,6 +44,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
     cache: "no-store",
   });
+
+  if (response.status === 401 && options.headers && typeof window !== "undefined") {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      const headers = new Headers(options.headers);
+      headers.set("Authorization", `Bearer ${refreshed.access_token}`);
+      const retry = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, cache: "no-store" });
+      if (!retry.ok) throw new Error((await retry.text()) || `API request failed with ${retry.status}`);
+      return retry.json() as Promise<T>;
+    }
+    clearTokens();
+  }
+
   if (!response.ok) throw new Error((await response.text()) || `API request failed with ${response.status}`);
   return response.json() as Promise<T>;
 }
