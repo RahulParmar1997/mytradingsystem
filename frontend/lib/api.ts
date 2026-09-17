@@ -46,13 +46,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function authHeaders(accessToken?: string): HeadersInit | undefined {
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
+}
+
 export function listAccounts(accessToken?: string): Promise<Account[]> {
-  return request<Account[]>("/api/v1/accounts", { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined });
+  return request<Account[]>("/api/v1/accounts", { headers: authHeaders(accessToken) });
+}
+
+export function listPositions(accountId: string, accessToken?: string): Promise<Position[]> {
+  return request<Position[]>(`/api/v1/accounts/${encodeURIComponent(accountId)}/positions`, { headers: authHeaders(accessToken) });
 }
 
 export function listOrders(accountId?: string, accessToken?: string): Promise<Order[]> {
   const query = accountId ? `?account_id=${encodeURIComponent(accountId)}` : "";
-  return request<Order[]>(`/api/v1/orders${query}`, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined });
+  return request<Order[]>(`/api/v1/orders${query}`, { headers: authHeaders(accessToken) });
 }
 
 export function createOrder(payload: {
@@ -68,7 +76,7 @@ export function createOrder(payload: {
 }, accessToken?: string): Promise<Order> {
   return request<Order>("/api/v1/orders", {
     method: "POST",
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    headers: authHeaders(accessToken),
     body: JSON.stringify(payload),
   });
 }
