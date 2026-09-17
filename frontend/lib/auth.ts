@@ -1,5 +1,3 @@
-import type { Account } from "./api";
-
 const ACCESS_TOKEN_KEY = "mts_access_token";
 const REFRESH_TOKEN_KEY = "mts_refresh_token";
 
@@ -65,5 +63,3 @@ export async function logout(): Promise<void> {
   }
   clearTokens();
 }
-
-export type DashboardAccount = Account;
