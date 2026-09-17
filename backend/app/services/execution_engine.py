@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -20,6 +21,13 @@ class ExecutionResult:
 class ExecutionEngine:
     """Routes approved orders to an execution adapter and keeps OMS state consistent."""
 
+    _EXECUTABLE_STATUSES = {
+        OrderStatus.PENDING,
+        OrderStatus.ACCEPTED,
+        OrderStatus.PARTIALLY_FILLED,
+        OrderStatus.CANCEL_PENDING,
+    }
+
     def __init__(self, broker, fill_service: FillService | None = None) -> None:
         self.broker = broker
         self.fill_service = fill_service or FillService()
@@ -33,11 +41,12 @@ class ExecutionEngine:
         price: Decimal,
         quantity: Decimal | None = None,
         fee: Decimal = Decimal("0"),
+        executed_at: datetime | None = None,
     ) -> ExecutionResult:
         order = await db.scalar(select(Order).where(Order.id == order_id).with_for_update())
         if order is None:
             raise ValueError("order not found")
-        if order.status not in {OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.PARTIALLY_FILLED}:
+        if order.status not in self._EXECUTABLE_STATUSES:
             raise ValueError(f"order cannot be executed from status {order.status.value}")
 
         remaining = order.quantity - order.filled_quantity
@@ -60,12 +69,22 @@ class ExecutionEngine:
                 quantity=execution_quantity,
                 price=price,
                 fee=fee,
+                executed_at=executed_at,
             ),
         )
         updated_status = await db.scalar(select(Order.status).where(Order.id == order_id))
         return ExecutionResult(status=updated_status or order.status, filled_quantity=fill.quantity, fill_id=fill.id)
 
-    def broker_execution(self, *, order_id: UUID, execution_id: str, quantity: Decimal, price: Decimal, fee: Decimal):
+    def broker_execution(
+        self,
+        *,
+        order_id: UUID,
+        execution_id: str,
+        quantity: Decimal,
+        price: Decimal,
+        fee: Decimal,
+        executed_at: datetime | None = None,
+    ):
         from app.services.paper_broker import PaperExecution
 
         return PaperExecution(
@@ -74,4 +93,5 @@ class ExecutionEngine:
             quantity=quantity,
             price=price,
             fee=fee,
+            executed_at=executed_at,
         )
