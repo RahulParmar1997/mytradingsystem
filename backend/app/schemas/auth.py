@@ -16,8 +16,9 @@ class LoginRequest(BaseModel):
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr
-    role: str
+    roles: list[str]
     is_active: bool
+    is_email_verified: bool
 
 
 class TokenResponse(BaseModel):
