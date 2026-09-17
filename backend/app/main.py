@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.accounts import router as accounts_router
 from app.api.auth import router as auth_router
@@ -8,8 +9,17 @@ from app.api.fills import router as fills_router
 from app.api.orders import router as orders_router
 from app.api.positions import router as positions_router
 from app.api.risk import router as risk_router
+from app.core.config import get_settings
 
+settings = get_settings()
 app = FastAPI(title="MyTradingSystem API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(accounts_router)
