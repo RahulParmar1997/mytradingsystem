@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.models.order import OrderSide
-from app.models.trading import TradingAccount, Position
+from app.models.trading import Position, TradingAccount
 
 
 @dataclass(frozen=True)
@@ -41,21 +41,31 @@ class RiskEngine:
         if price <= 0:
             reasons.append("reference price must be greater than zero")
 
-        notional = quantity * price
-        if notional > self.limits.max_order_notional:
-            reasons.append("order notional exceeds configured limit")
+        if quantity > 0 and price > 0:
+            notional = quantity * price
+            if notional > self.limits.max_order_notional:
+                reasons.append("order notional exceeds configured limit")
+            if side == OrderSide.BUY and notional > account.cash_balance:
+                reasons.append("insufficient cash balance")
+        else:
+            notional = Decimal("0")
 
         if open_order_count >= self.limits.max_open_orders:
             reasons.append("maximum open orders reached")
 
         existing_qty = position.quantity if position else Decimal("0")
-        projected_qty = existing_qty + quantity if side == OrderSide.BUY else existing_qty - quantity
-        projected_notional = abs(projected_qty) * price
+        if side == OrderSide.SELL and quantity > existing_qty:
+            reasons.append("sell quantity exceeds available position")
+            projected_qty = Decimal("0")
+        else:
+            projected_qty = existing_qty + quantity if side == OrderSide.BUY else existing_qty - quantity
+
+        projected_notional = abs(projected_qty) * price if price > 0 else Decimal("0")
         if projected_notional > self.limits.max_position_notional:
             reasons.append("projected position notional exceeds configured limit")
 
         # realized_pnl is the account-level loss proxy until a daily P&L ledger exists.
-        if account.realized_pnl < -self.limits.max_daily_loss:
+        if account.realized_pnl <= -self.limits.max_daily_loss:
             reasons.append("daily loss limit has been breached")
 
         return RiskDecision(approved=not reasons, reasons=tuple(reasons))
