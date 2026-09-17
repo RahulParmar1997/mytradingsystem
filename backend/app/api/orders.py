@@ -7,14 +7,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.order import Order, OrderStatus, OrderType
+from app.models.risk import RiskLimit
 from app.models.trading import Position, TradingAccount
 from app.models.user import User
-from app.risk.engine import RiskEngine
+from app.risk.engine import RiskEngine, RiskLimits
 from app.schemas.orders import OrderCreate, OrderResponse
 
 router = APIRouter(prefix="/api/v1/orders", tags=["orders"])
-risk_engine = RiskEngine()
 OPEN_STATUSES = ["PENDING", "ACCEPTED", "PARTIALLY_FILLED", "CANCEL_PENDING"]
+
+
+def build_engine(limits: RiskLimit | None) -> RiskEngine:
+    if limits is None:
+        return RiskEngine()
+    return RiskEngine(
+        RiskLimits(
+            max_order_notional=limits.max_order_notional,
+            max_position_notional=limits.max_position_notional,
+            max_daily_loss=limits.max_daily_loss,
+            max_open_orders=limits.max_open_orders,
+        )
+    )
 
 
 @router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
@@ -67,7 +80,8 @@ async def create_order(
             Order.status.in_(OPEN_STATUSES),
         )
     )
-    decision = risk_engine.evaluate_order(
+    limits = await db.scalar(select(RiskLimit).where(RiskLimit.account_id == account.id))
+    decision = build_engine(limits).evaluate_order(
         account=account,
         side=payload.side,
         quantity=payload.quantity,
