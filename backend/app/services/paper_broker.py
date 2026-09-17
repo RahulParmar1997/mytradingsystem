@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -14,6 +15,7 @@ class PaperExecution:
     quantity: Decimal
     price: Decimal
     fee: Decimal = Decimal("0")
+    executed_at: datetime | None = None
 
 
 class PaperBroker:
@@ -30,4 +32,5 @@ class PaperBroker:
             quantity=execution.quantity,
             price=execution.price,
             fee=execution.fee,
+            executed_at=execution.executed_at,
         )
