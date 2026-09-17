@@ -52,16 +52,26 @@ class ExecutionEngine:
             order.status = OrderStatus.ACCEPTED
             await db.flush()
 
-        result = await self.broker.execute(
+        fill = await self.broker.execute(
             db,
+            execution=self.broker_execution(
+                order_id=order_id,
+                execution_id=execution_id,
+                quantity=execution_quantity,
+                price=price,
+                fee=fee,
+            ),
+        )
+        updated_status = await db.scalar(select(Order.status).where(Order.id == order_id))
+        return ExecutionResult(status=updated_status or order.status, filled_quantity=fill.quantity, fill_id=fill.id)
+
+    def broker_execution(self, *, order_id: UUID, execution_id: str, quantity: Decimal, price: Decimal, fee: Decimal):
+        from app.services.paper_broker import PaperExecution
+
+        return PaperExecution(
             order_id=order_id,
             execution_id=execution_id,
-            quantity=execution_quantity,
+            quantity=quantity,
             price=price,
             fee=fee,
-        )
-        return ExecutionResult(
-            status=result and (await db.scalar(select(Order.status).where(Order.id == order_id))) or order.status,
-            filled_quantity=execution_quantity,
-            fill_id=result.id if result else None,
         )
